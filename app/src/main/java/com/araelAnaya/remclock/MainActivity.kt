@@ -31,8 +31,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             RemClockTheme {
-                var hour by remember { mutableStateOf(7) }
-                var minute by remember { mutableStateOf(0) }
+                var time by remember { mutableStateOf(Time12(hour = 7, minute = 0, isAm = true)) }
+
+                val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+                val amPm = java.text.DateFormatSymbols(locale).amPmStrings
+                val amLabel = amPm.getOrNull(0) ?: "AM"
+                val pmLabel = amPm.getOrNull(1) ?: "PM"
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -45,50 +50,36 @@ class MainActivity : ComponentActivity() {
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold
                     )
+
                     Spacer(modifier = Modifier.height(24.dp))
+
                     Text(
-                        text = String.format("%02d:%02d", hour, minute),
+                        text = "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')} ${if (time.isAm) amLabel else pmLabel}",
                         fontSize = 28.sp
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = {
-                        showTimePicker(hour, minute) { h, m ->
-                            hour = h
-                            minute = m
-                        }
-                    }) {
-                        Text("Pick Time")
-                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    TimeInput(
+                        value = time,
+                        onChange = { time = it }
+                    )
+
                     Spacer(modifier = Modifier.height(32.dp))
+
                     Button(onClick = {
                         ensureExactAlarmPermission()
-                        scheduleAlarm(hour, minute)
+                        val (h24, m) = time.to24Hour()
+                        scheduleAlarm(h24, m)
                     }) {
                         Text("Set Alarm")
                     }
-
                 }
             }
         }
-    }
-    private fun showTimePicker(
-        currentHour: Int,
-        currentMinute: Int,
-        onTimeSelected: (Int, Int) -> Unit
-    ) {
-        val dialog = android.app.TimePickerDialog(
-            this,
-            { _, hour, minute ->
-                onTimeSelected(hour, minute)
-            },
-            currentHour,
-            currentMinute,
-            true
-        )
-        dialog.show()
-    }
 
-    private fun scheduleAlarm(hour: Int, minute: Int) {
+    }
+     private fun scheduleAlarm(hour: Int, minute: Int) {
         val calendar = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, hour)
             set(java.util.Calendar.MINUTE, minute)
