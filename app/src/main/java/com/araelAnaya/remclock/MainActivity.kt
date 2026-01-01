@@ -6,22 +6,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import com.araelAnaya.remclock.ui.theme.RemClockTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.runtime.collectAsState
+import com.araelAnaya.remclock.storage.RemPreferences
+import com.araelAnaya.remclock.storage.SleepSettingsStorage
+import com.araelAnaya.remclock.storage.AlarmSettingsStorage
+import kotlinx.coroutines.launch
+
+
 
 
 
@@ -35,10 +38,23 @@ class MainActivity : ComponentActivity() {
                 val amPm = java.text.DateFormatSymbols(locale).amPmStrings
                 val amLabel = amPm.getOrNull(0) ?: "AM"
                 val pmLabel = amPm.getOrNull(1) ?: "PM"
-                var remEnabled by remember { mutableStateOf(false) }
 
-                var alarmTime by remember { mutableStateOf(Time12(8, 0, true)) }
-                var bedtime by remember { mutableStateOf(Time12(11, 0, false)) } // default 11:00 PM
+                //store Rem Settings
+                val scope = rememberCoroutineScope()
+
+                val remEnabled by RemPreferences
+                    .remEnabledFlow(this)
+                    .collectAsState(initial = false)
+
+
+                val alarmTime by AlarmSettingsStorage
+                    .alarmTimeFlow(this)
+                    .collectAsState(initial = Time12(8, 0, true))
+
+                val bedTime by SleepSettingsStorage
+                    .bedtimeFlow(this)
+                    .collectAsState(initial = Time12(11, 0, false))
+
                 var showBedtimeDialog by remember { mutableStateOf(false) }
 
                 Column(
@@ -66,9 +82,15 @@ class MainActivity : ComponentActivity() {
                     TimeInput(
                         value = alarmTime,
                         onChange = { update ->
-                            alarmTime = update(alarmTime)
+                            scope.launch {
+                                AlarmSettingsStorage.setAlarmTime(
+                                    this@MainActivity,
+                                    update(alarmTime)
+                                )
+                            }
                         }
                     )
+
 
                     Spacer(modifier = Modifier.height(32.dp))
 
@@ -88,19 +110,22 @@ class MainActivity : ComponentActivity() {
 
                     if (showBedtimeDialog) {
                         BedtimeDialog(
-                            initialTime = bedtime,
+                            initialTime = bedTime,
                             onDismiss = { showBedtimeDialog = false },
                             onSave = { newBedtime ->
-                                bedtime = newBedtime
+                                scope.launch {
+                                    SleepSettingsStorage.setBedtime(this@MainActivity, newBedtime)
+                                }
                                 showBedtimeDialog = false
                             }
+
                         )
                     }
                     Text(
-                        text = "Bedtime: ${bedtime.hour}:${bedtime.minute.toString().padStart(2, '0')} ${if (bedtime.isAm) "AM" else "PM"}"
+                        text = "Bedtime: ${bedTime.hour}:${bedTime.minute.toString().padStart(2, '0')} ${if (bedTime.isAm) "AM" else "PM"}"
                     )
 
-                    val sleepMinutes = computeSleepDurationMinutes(bedtime, alarmTime)
+                    val sleepMinutes = computeSleepDurationMinutes(bedTime, alarmTime)
                     val (sleepHours, sleepRemainderMinutes) =
                         formatSleepDuration(sleepMinutes)
 
@@ -118,14 +143,32 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(Modifier.height(24.dp))
 
-                    Button(
-                        onClick = { remEnabled = !remEnabled }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (remEnabled) "Hide REM Suggestions" else "Show REM Suggestions")
+                        Text(
+                            text = "REM Mode",
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Switch(
+                            checked = remEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    RemPreferences.setRemEnabled(this@MainActivity, enabled)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = androidx.compose.ui.graphics.Color(0xFF1E88E5)
+                            )
+                        )
+
                     }
 
                     if (remEnabled) {
-                        val remWakeTimes = computeRemWakeTimes(bedtime, sleepMinutes)
+                        val remWakeTimes = computeRemWakeTimes(bedTime, sleepMinutes)
                         val closestRem = findClosestRemTime(remWakeTimes, alarmTime)
 
                         Spacer(Modifier.height(16.dp))
@@ -156,7 +199,13 @@ class MainActivity : ComponentActivity() {
 
                             Button(
                                 onClick = {
-                                    alarmTime = minutesToTime12(closestRem)
+                                    scope.launch {
+                                        AlarmSettingsStorage.setAlarmTime(
+                                            this@MainActivity,
+                                            minutesToTime12(closestRem)
+                                        )
+                                    }
+
                                 }
                             ) {
                                 Text("Use Recommended Time")
