@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
                 val amPm = java.text.DateFormatSymbols(locale).amPmStrings
                 val amLabel = amPm.getOrNull(0) ?: "AM"
                 val pmLabel = amPm.getOrNull(1) ?: "PM"
+                var remEnabled by remember { mutableStateOf(false) }
 
                 var alarmTime by remember { mutableStateOf(Time12(8, 0, true)) }
                 var bedtime by remember { mutableStateOf(Time12(11, 0, false)) } // default 11:00 PM
@@ -99,6 +100,69 @@ class MainActivity : ComponentActivity() {
                         text = "Bedtime: ${bedtime.hour}:${bedtime.minute.toString().padStart(2, '0')} ${if (bedtime.isAm) "AM" else "PM"}"
                     )
 
+                    val sleepMinutes = computeSleepDurationMinutes(bedtime, alarmTime)
+                    val (sleepHours, sleepRemainderMinutes) =
+                        formatSleepDuration(sleepMinutes)
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = "Sleep Duration",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "$sleepHours hours $sleepRemainderMinutes minutes",
+                        fontSize = 18.sp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    Button(
+                        onClick = { remEnabled = !remEnabled }
+                    ) {
+                        Text(if (remEnabled) "Hide REM Suggestions" else "Show REM Suggestions")
+                    }
+
+                    if (remEnabled) {
+                        val remWakeTimes = computeRemWakeTimes(bedtime, sleepMinutes)
+                        val closestRem = findClosestRemTime(remWakeTimes, alarmTime)
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Text(
+                            text = "Recommended wake times",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        remWakeTimes.forEach { minutes ->
+                            val t = minutesToTime12(minutes)
+                            val isClosest = minutes == closestRem
+
+                            Text(
+                                text = "${t.hour}:${
+                                    t.minute.toString().padStart(2, '0')
+                                } ${if (t.isAm) "AM" else "PM"}",
+                                color = if (isClosest)
+                                    androidx.compose.ui.graphics.Color(0xFF1E88E5)
+                                else
+                                    androidx.compose.ui.graphics.Color.Unspecified,
+                                fontWeight = if (isClosest) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+
+                        if (closestRem != null) {
+                            Spacer(Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    alarmTime = minutesToTime12(closestRem)
+                                }
+                            ) {
+                                Text("Use Recommended Time")
+                            }
+                        }
+                    }
                 }
             }
         }
