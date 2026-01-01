@@ -1,23 +1,27 @@
 package com.araelAnaya.remclock
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.text.DateFormatSymbols
 
 @Composable
 fun TimeInput(
     value: Time12,
-    onChange: (Time12) -> Unit,
+    onChange: ((Time12) -> Time12) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val locale = LocalConfiguration.current.locales[0]
@@ -30,47 +34,40 @@ fun TimeInput(
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+
         TimeStepper(
-            label = "Hour",
             display = value.hour.toString().padStart(2, '0'),
-            onUp = { onChange(value.copy(hour = clampHour12(value.hour + 1))) },
-            onDown = { onChange(value.copy(hour = clampHour12(value.hour - 1))) }
+            onDelta = { d ->
+                onChange { it.copy(hour = clampHour12(it.hour + d)) }
+            }
         )
 
-        Text(
-            text = ":",
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Text(":", fontSize = 34.sp, fontWeight = FontWeight.Bold)
 
         TimeStepper(
-            label = "Minute",
             display = value.minute.toString().padStart(2, '0'),
-            onUp = { onChange(value.copy(minute = clampMinute(value.minute + 1))) },
-            onDown = { onChange(value.copy(minute = clampMinute(value.minute - 1))) }
+            onDelta = { d ->
+                onChange { it.copy(minute = clampMinute(it.minute + d)) }
+            }
         )
 
         TimeStepper(
-            label = "AM/PM",
             display = if (value.isAm) amLabel else pmLabel,
-            onUp = { onChange(value.copy(isAm = !value.isAm)) },
-            onDown = { onChange(value.copy(isAm = !value.isAm)) }
+            onDelta = {
+                onChange { it.copy(isAm = !it.isAm) }
+            }
         )
     }
 }
 
 @Composable
 private fun TimeStepper(
-    label: String,
     display: String,
-    onUp: () -> Unit,
-    onDown: () -> Unit
+    onDelta: (Int) -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
-            onClick = onUp,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-        ) { Text("▲") }
+
+        HoldButton("▲") { onDelta(+1) }
 
         Spacer(Modifier.height(8.dp))
 
@@ -82,19 +79,51 @@ private fun TimeStepper(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = display,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text(display, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
         Spacer(Modifier.height(8.dp))
 
-        Button(
-            onClick = onDown,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-        ) { Text("▼") }
+        HoldButton("▼") { onDelta(-1) }
+    }
+}
+
+
+@Composable
+private fun HoldButton(
+    label: String,
+    onHold: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .padding(4.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        onHold()
+
+                        val job = scope.launch {
+                            delay(300)
+                            while (isActive) {
+                                onHold()
+                                delay(80)
+                            }
+                        }
+
+                        try {
+                            awaitRelease()
+                        } finally {
+                            job.cancel()
+                        }
+                    }
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }

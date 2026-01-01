@@ -31,12 +31,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             RemClockTheme {
-                var time by remember { mutableStateOf(Time12(hour = 7, minute = 0, isAm = true)) }
-
                 val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
                 val amPm = java.text.DateFormatSymbols(locale).amPmStrings
                 val amLabel = amPm.getOrNull(0) ?: "AM"
                 val pmLabel = amPm.getOrNull(1) ?: "PM"
+
+                var alarmTime by remember { mutableStateOf(Time12(8, 0, true)) }
+                var bedtime by remember { mutableStateOf(Time12(11, 0, false)) } // default 11:00 PM
+                var showBedtimeDialog by remember { mutableStateOf(false) }
 
                 Column(
                     modifier = Modifier
@@ -54,30 +56,52 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')} ${if (time.isAm) amLabel else pmLabel}",
+                        text = "${alarmTime.hour.toString().padStart(2, '0')}:${alarmTime.minute.toString().padStart(2, '0')} ${if (alarmTime.isAm) amLabel else pmLabel}",
                         fontSize = 28.sp
                     )
 
                     Spacer(modifier = Modifier.height(18.dp))
 
                     TimeInput(
-                        value = time,
-                        onChange = { time = it }
+                        value = alarmTime,
+                        onChange = { update ->
+                            alarmTime = update(alarmTime)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Button(onClick = {
                         ensureExactAlarmPermission()
-                        val (h24, m) = time.to24Hour()
+                        val (h24, m) = alarmTime.to24Hour()
                         scheduleAlarm(h24, m)
                     }) {
                         Text("Set Alarm")
                     }
+
+                    Button(
+                        onClick = { showBedtimeDialog = true }
+                    ) {
+                        Text("Set Bedtime")
+                    }
+
+                    if (showBedtimeDialog) {
+                        BedtimeDialog(
+                            initialTime = bedtime,
+                            onDismiss = { showBedtimeDialog = false },
+                            onSave = { newBedtime ->
+                                bedtime = newBedtime
+                                showBedtimeDialog = false
+                            }
+                        )
+                    }
+                    Text(
+                        text = "Bedtime: ${bedtime.hour}:${bedtime.minute.toString().padStart(2, '0')} ${if (bedtime.isAm) "AM" else "PM"}"
+                    )
+
                 }
             }
         }
-
     }
      private fun scheduleAlarm(hour: Int, minute: Int) {
         val calendar = java.util.Calendar.getInstance().apply {
