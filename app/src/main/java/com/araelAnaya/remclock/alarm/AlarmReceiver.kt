@@ -1,4 +1,4 @@
-package com.araelAnaya.remclock
+package com.araelAnaya.remclock.alarm
 
 import android.content.BroadcastReceiver
 import android.content.Context

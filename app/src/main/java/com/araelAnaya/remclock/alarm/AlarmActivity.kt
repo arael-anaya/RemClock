@@ -1,4 +1,4 @@
-package com.araelAnaya.remclock
+package com.araelAnaya.remclock.alarm
 
 import android.media.MediaPlayer
 import android.os.Bundle

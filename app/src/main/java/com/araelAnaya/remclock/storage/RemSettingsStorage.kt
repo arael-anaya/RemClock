@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.map
 import com.araelAnaya.remclock.storage.dataStore
 
 
-object RemPreferences {
+object RemSettingsStorage {
 
     private val REM_ENABLED = booleanPreferencesKey("rem_enabled")
 
