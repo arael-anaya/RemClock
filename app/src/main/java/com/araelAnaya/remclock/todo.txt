@@ -1,7 +1,4 @@
 2. Personalization & Calibration
-The average REM cycle is $90$ minutes, but many people vary between $70$ and $110$.
-Cycle Tuning: Allow users to manually adjust their "Cycle Length" in settings if they find they’re
-waking up groggy at the $90$-minute mark.
 Power Nap Mode: A dedicated section for "NASA Naps" ($20$ minutes) or "Full Cycle Naps" ($90$ minutes)
 that bypasses the standard alarm setup.
 
@@ -29,3 +26,4 @@ Over time, the app can tell the user, "You seem to feel best when you get 4 cycl
   6.
   Some sort of deep learning LLM model that learns the users patterns and optimizes
   how they should be sleeping.
+  Show how much sleep the user will get

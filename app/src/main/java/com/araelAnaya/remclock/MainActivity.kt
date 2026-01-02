@@ -23,7 +23,6 @@ import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.araelAnaya.remclock.alarm.*
-import com.araelAnaya.remclock.repository.*
 import com.araelAnaya.remclock.storage.AlarmModeStorage
 import com.araelAnaya.remclock.time.findClosestRemTime
 import com.araelAnaya.remclock.time.formatSleepDuration
@@ -31,7 +30,12 @@ import com.araelAnaya.remclock.time.minutesToTime12
 import com.araelAnaya.remclock.ui.theme.RemClockTheme
 import com.araelAnaya.remclock.viewmodel.MainViewModel
 import androidx.lifecycle.SavedStateHandle
-
+import com.araelAnaya.remclock.storage.repository.impl.AlarmModeRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.AlarmSettingsRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.RemSettingsRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.SleepSettingsRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.SleepStreakRepositoryImpl
+import com.araelAnaya.remclock.viewmodel.model
 
 
 class MainActivity : ComponentActivity() {
@@ -50,14 +54,14 @@ class MainActivity : ComponentActivity() {
                         ): T {
                             @Suppress("UNCHECKED_CAST")
                             return MainViewModel(
+                                appContext = appContext,
                                 alarmRepo = AlarmSettingsRepositoryImpl(appContext),
                                 sleepRepo = SleepSettingsRepositoryImpl(appContext),
                                 remRepo = RemSettingsRepositoryImpl(appContext),
-                                alarmModeRepo = AlarmModeRepositoryImpl(
-                                    AlarmModeStorage(appContext)
-                                ),
+                                alarmModeRepo = AlarmModeRepositoryImpl(AlarmModeStorage(appContext)),
+                                streakRepo = SleepStreakRepositoryImpl(appContext),
                                 savedStateHandle = handle
-                            ) as T
+                            )as T
                         }
                     }
                 }
@@ -65,6 +69,10 @@ class MainActivity : ComponentActivity() {
 
                 val vm: MainViewModel = viewModel(factory = vmFactory)
                 RemClockScreen(vm)
+
+
+
+
             }
         }
     }
@@ -86,6 +94,11 @@ fun RemClockScreen(vm: MainViewModel) {
     val sleepMinutes by vm.sleepMinutes.collectAsState()
     val alarmMode by vm.alarmMode.collectAsState()
     val remEnabled by vm.remEnabled.collectAsState()
+    val remCycleMinutes by vm.remCycleMinutes.collectAsState()
+    val sleepStreak by vm.sleepStreak.collectAsState()
+    val streakStage by vm.streakStage.collectAsState()
+
+
 
     var showBedtimeDialog by remember { mutableStateOf(false) }
     var showAlarmTimeDialog by remember { mutableStateOf(false) }
@@ -206,6 +219,35 @@ fun RemClockScreen(vm: MainViewModel) {
                             h24 * 60 + alarmTime.minute
                         }
 
+                        // --- CYCLE TUNING ---
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            "REM Cycle Length",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+
+                        Text(
+                            "$remCycleMinutes minutes",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Slider(
+                            value = remCycleMinutes.toFloat(),
+                            onValueChange = { vm.setRemCycleMinutes(it.toInt()) },
+                            valueRange = 70f..110f,
+                            steps = 7, // 5-minute increments
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+
+                        Text(
+                            "If you wake up groggy, try adjusting this.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+
                         Text("Recommended times:", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
                         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             remWakeTimes.take(3).forEach { minutes ->
@@ -225,6 +267,26 @@ fun RemClockScreen(vm: MainViewModel) {
                                 )
                             }
                         }
+                    }
+                    Text(
+                        "Sleep streak: ${sleepStreak} nights",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Text(
+                        when (streakStage) {
+                            model.StreakStage.EMBER -> "Your routine is catching fire 🔥"
+                            model.StreakStage.CAMPFIRE -> "You’re building consistency 🌙"
+                            model.StreakStage.BONFIRE -> "Sleep mastery unlocked 🌕"
+                            else -> "Start a streak tonight"
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text("How do you feel this morning?")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.GROGGY) }) { Text("Groggy") }
+                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.OKAY) }) { Text("Okay") }
+                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.ENERGIZED) }) { Text("Energized") }
                     }
                 }
             }
@@ -257,6 +319,8 @@ fun RemClockScreen(vm: MainViewModel) {
             }
         )
     }
+
+
 }
 
 @Composable

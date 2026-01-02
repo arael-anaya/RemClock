@@ -1,4 +1,4 @@
-package com.araelAnaya.remclock.repository
+package com.araelAnaya.remclock.storage.repository
 
 import com.araelAnaya.remclock.time.Time12
 import kotlinx.coroutines.flow.StateFlow

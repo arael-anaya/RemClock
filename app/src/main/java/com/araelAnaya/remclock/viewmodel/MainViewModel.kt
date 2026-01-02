@@ -1,8 +1,8 @@
 package com.araelAnaya.remclock.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.araelAnaya.remclock.repository.*
 import com.araelAnaya.remclock.time.Time12
 import com.araelAnaya.remclock.time.computeRemWakeTimes
 import com.araelAnaya.remclock.time.computeSleepDurationMinutes
@@ -12,17 +12,22 @@ import com.araelAnaya.remclock.time.to24Hour
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.araelAnaya.remclock.alarm.AlarmMode
-import com.araelAnaya.remclock.repository.AlarmModeRepository
+import com.araelAnaya.remclock.storage.repository.AlarmModeRepository
 import androidx.lifecycle.SavedStateHandle
+import com.araelAnaya.remclock.storage.MorningVibeStorage
+import com.araelAnaya.remclock.storage.repository.*
 import com.araelAnaya.remclock.time.toMinutesSinceMidnight
+import com.araelAnaya.remclock.viewmodel.model
 
 
 class MainViewModel(
+    private val appContext: Context,
     private val alarmRepo: AlarmSettingsRepository,
     private val sleepRepo: SleepSettingsRepository,
     private val remRepo: RemSettingsRepository,
     private val alarmModeRepo: AlarmModeRepository,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val streakRepo: SleepStreakRepository,
 ) : ViewModel() {
 
     // ---------- Persisted state ----------
@@ -37,6 +42,12 @@ class MainViewModel(
             initialValue = AlarmMode.EXACT
         )
 
+    val remCycleMinutes: StateFlow<Int> = remRepo.remCycleMinutes
+
+    val sleepStreak: StateFlow<Int> = streakRepo.streak
+
+
+
     // ---------- Derived state ----------
 
     val sleepMinutes: StateFlow<Int> =
@@ -49,13 +60,18 @@ class MainViewModel(
         )
 
     val remWakeTimes: StateFlow<List<Int>> =
-        combine(bedtime, sleepMinutes) { bed, minutes ->
-            computeRemWakeTimes(bed, minutes)
+        combine(bedtime, sleepMinutes, remCycleMinutes) { bed, minutes, cycle ->
+            computeRemWakeTimes(
+                bedtime = bed,
+                totalSleepMinutes = minutes,
+                cycleMinutes = cycle
+            )
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
             emptyList()
         )
+
 
     val closestRem: StateFlow<Int?> =
         combine(remWakeTimes, alarmTime) { rems, alarm ->
@@ -73,6 +89,15 @@ class MainViewModel(
         set(value) {
             savedStateHandle[MANUAL_BACKUP_KEY] = value
         }
+    val plannedSleepMinutes: StateFlow<Int> =
+        combine(bedtime, alarmTime) { bed, alarm ->
+            computeSleepDurationMinutes(bed, alarm)
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            0
+        )
+
 
     // ---------- Events ----------
 
@@ -134,6 +159,54 @@ class MainViewModel(
             }
         }
     }
+
+    fun setRemCycleMinutes(minutes: Int) {
+        viewModelScope.launch {
+            remRepo.setRemCycleMinutes(minutes)
+        }
+    }
+
+    fun recordNightOutcome() {
+        val success =
+            sleepMinutes.value in
+                    (plannedSleepMinutes.value - 30)..(plannedSleepMinutes.value + 30)
+
+
+
+        viewModelScope.launch {
+            streakRepo.recordNight(success)
+        }
+    }
+
+
+    fun streakToStage(streak: Int): model.StreakStage =
+        when {
+            streak >= 10 -> model.StreakStage.BONFIRE
+            streak >= 5 -> model.StreakStage.CAMPFIRE
+            streak >= 2 ->  model.StreakStage.EMBER
+            else ->  model.StreakStage.NONE
+        }
+
+    val streakStage: StateFlow< model.StreakStage> =
+        sleepStreak.map { streakToStage(it) }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                model.StreakStage.NONE
+            )
+
+
+
+    fun submitMorningVibe(vibe: model.MorningVibe) {
+        viewModelScope.launch {
+            MorningVibeStorage.recordVibe(appContext, vibe)
+        }
+    }
+
+
+
+
+
 
 
 

@@ -6,8 +6,8 @@ import android.content.Intent
 import com.araelAnaya.remclock.alarm.AlarmMode
 import com.araelAnaya.remclock.alarm.AlarmScheduler
 import com.araelAnaya.remclock.alarm.WakeWindowCalculator
-import com.araelAnaya.remclock.repository.AlarmModeRepositoryImpl
-import com.araelAnaya.remclock.repository.AlarmSettingsRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.AlarmModeRepositoryImpl
+import com.araelAnaya.remclock.storage.repository.impl.AlarmSettingsRepositoryImpl
 import com.araelAnaya.remclock.storage.AlarmModeStorage
 import com.araelAnaya.remclock.time.to24Hour
 import kotlinx.coroutines.CoroutineScope

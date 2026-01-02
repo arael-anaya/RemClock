@@ -1,8 +1,9 @@
-package com.araelAnaya.remclock.repository
+package com.araelAnaya.remclock.storage.repository.impl
 
 import android.content.Context
 import com.araelAnaya.remclock.time.Time12
 import com.araelAnaya.remclock.storage.AlarmSettingsStorage
+import com.araelAnaya.remclock.storage.repository.AlarmSettingsRepository
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted

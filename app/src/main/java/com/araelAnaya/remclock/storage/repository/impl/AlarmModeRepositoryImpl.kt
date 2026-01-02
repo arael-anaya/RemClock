@@ -1,7 +1,8 @@
-package com.araelAnaya.remclock.repository
+package com.araelAnaya.remclock.storage.repository.impl
 
 import com.araelAnaya.remclock.alarm.AlarmMode
 import com.araelAnaya.remclock.storage.AlarmModeStorage
+import com.araelAnaya.remclock.storage.repository.AlarmModeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
