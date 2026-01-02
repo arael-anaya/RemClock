@@ -3,11 +3,7 @@ Power Nap Mode: A dedicated section for "NASA Naps" ($20$ minutes) or "Full Cycl
 that bypasses the standard alarm setup.
 
 3. Gamification & InsightsGive users a reason to open the app besides just turning off a noise.
-Sleep Streaks: Visual rewards (like a growing moon or a cozy campfire) for hitting their sleep
-duration goals five nights in a row.
-Morning "Vibe" Check: A simple 3-button survey upon waking: "Groggy," "Okay," or "Energized."
-Over time, the app can tell the user, "You seem to feel best when you get 4 cycles (6 hours) rather
- than 5!"
+Make streaks and check in UI better. Hide Check in Ui after answer is selected, or x in corner.
 
  4. Aesthetic & UX EnhancementsTo hit that "Warm/Fun" vibe you're looking for:
  Dynamic Backgrounds: The UI color could shift based on the time of day—deep indigos and purples at
@@ -27,3 +23,320 @@ Over time, the app can tell the user, "You seem to feel best when you get 4 cycl
   Some sort of deep learning LLM model that learns the users patterns and optimizes
   how they should be sleeping.
   Show how much sleep the user will get
+
+  RemClock Deep Analysis (codebase audit from RemClock.zip)
+
+  Scope
+  - Code reviewed under: app/src/main/java/com/araelAnaya/remclock/*
+  - Manifest + alarm/boot + DataStore repositories + unit tests under app/src/test
+  - Notes include what is currently implemented vs. what is implied by UI/feature text.
+
+  ========================================
+  0) Immediate “does it compile / run” checklist
+  ========================================
+  A. Alarm sound will not play (core functionality gap)
+  - AlarmForegroundService exists (alarm/AlarmForegroundServices.kt) and correctly starts MediaPlayer in onCreate() and calls startForeground().
+  - BUT nothing ever starts this service.
+    - Search across codebase: no startService() / startForegroundService() calls found.
+    - AlarmReceiver (alarm/AlarmReceiver.kt) currently only launches AlarmActivity.
+    - AlarmActivity only stops the service (Dismiss/Snooze), but never starts it.
+  What to do
+  1) Start AlarmForegroundService when an alarm fires (best place: AlarmReceiver).
+     - In AlarmReceiver.onReceive():
+       - call ContextCompat.startForegroundService(...) to start AlarmForegroundService
+       - also launch (or notify) AlarmActivity in a compliant way (see section 2).
+  2) Ensure AlarmActivity is started from a user-visible path (full-screen notification) to avoid background-launch restrictions.
+
+  B. Smart Window / Wake window extras are ignored
+  - AlarmScheduler schedules different intents with extras:
+    - FAILSAFE, WINDOW_START, HARD_STOP (AlarmScheduler.kt)
+  - AlarmReceiver ignores all extras and always starts AlarmActivity.
+  Result: window logic is not actually implemented; the app effectively rings immediately at whichever pending intent fires.
+
+  C. Unit test contains a wrong expected value (will fail)
+  - app/src/test/java/com/araelAnaya/remclock/SleepMathTest.kt
+    - exactlyOneRemCycle_whenSleepIsNinetyMinutes expects 1410 (11:30 PM)
+    - With bedtime 11:00 PM and sleep 90 min, the wake time is 12:30 AM => 30 minutes since midnight.
+  What to do
+  - Change expected list to [30] for that test, or clarify that the function should return “REM boundaries before bedtime” (unlikely).
+
+  D. Repository / Flow scope usage could leak work
+  - RemSettingsRepositoryImpl uses its own CoroutineScope(Dispatchers.IO) with SharingStarted.Eagerly.
+  - If repeated construction happens, multiple eager collectors can exist.
+  What to do
+  - Prefer injecting a shared scope (viewModelScope) or use stateIn(viewModelScope, WhileSubscribed, initial).
+  - Or make repositories singletons via DI.
+
+  ========================================
+  1) Current architecture (what you have)
+  ========================================
+  UI
+  - MainActivity is a Compose screen with cards for:
+    - Sleep duration, bedtime setting
+    - “REM Smart Mode” toggle that actually toggles AlarmMode (EXACT vs SMART_WINDOW)
+    - Recommended REM wake times (only visible when remEnabled && SMART_WINDOW)
+    - Alarm time setting dialog, cycle length controls, streak display, etc.
+
+  State
+  - MainViewModel collects StateFlows from repositories:
+    - alarmTime, bedtime, remEnabled, remCycleMinutes, alarmMode, sleepStreak, etc.
+  - DataStore is used for persistence:
+    - AlarmSettingsStorage, SleepSettingsStorage, RemSettingsStorage, SleepStreakStorage, AlarmModeStorage, MorningVibeStorage.
+
+  Alarm system
+  - AlarmScheduler:
+    - scheduleAlarm(): exact + allow while idle + failsafe 10 minutes later
+    - scheduleWakeWindow(): sets windowStart and hardStop alarms
+    - snooze(): uses alarmMode and likely re-schedules (needs careful logic)
+  - AlarmReceiver currently starts AlarmActivity only
+  - AlarmActivity shows UI and offers Dismiss/Snooze, stopping AlarmForegroundService (even though it is never started)
+
+  Boot persistence
+  - BootCompletedReceiver listens to BOOT_COMPLETED and re-schedules based on stored alarm time + alarm mode.
+  - For SMART_WINDOW it calculates a target time and then uses WakeWindowCalculator (defined inside AlarmTimeCalculator.kt) to derive a window and schedule alarms.
+
+  Awareness
+  - UserAwakeReceiver exists but has no manifest intent-filter and is not dynamically registered, so it never fires.
+
+  ========================================
+  2) Alarm reliability and Android behavior (must-fix for real users)
+  ========================================
+  A. Background activity launch restrictions
+  - Starting an Activity directly from a BroadcastReceiver can be blocked or unreliable on modern Android versions unless it is driven by a high-priority alarm/notification flow.
+  What to do (recommended pattern)
+  1) In AlarmReceiver:
+     - Start AlarmForegroundService immediately (so audio can begin even if UI is delayed).
+     - Post a high-importance notification with a FullScreenIntent pointing to AlarmActivity.
+     - Mark category as ALARM and set priority high.
+  2) In AlarmActivity:
+     - Keep showWhenLocked/turnScreenOn (already set in manifest)
+     - Provide Dismiss/Snooze actions that:
+       - stop AlarmForegroundService
+       - cancel the current alarm(s) and schedule snooze / next cycle
+  3) If you want “Clock app” grade behavior:
+     - Consider AlarmManager.setAlarmClock(AlarmClockInfo) for user-visible alarms.
+     - This also helps with system treatment of alarms.
+
+  B. Android 13+ notification permission
+  - targetSdk is 36; for Android 13+ you need runtime POST_NOTIFICATIONS to show notifications (including foreground service notifications).
+  What to do
+  - Add <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> in manifest.
+  - Request permission at runtime on first launch (or before enabling alarms).
+
+  C. Exact alarm policy
+  - You request SCHEDULE_EXACT_ALARM.
+  - On Android 12+ this is “special app access”; Play policies expect a strong justification for exact alarms.
+  What to do
+  - Provide in-app explanation when enabling alarms.
+  - Consider using setAlarmClock() to align with alarm clock use-case.
+  - Ensure you handle the case where the user denies exact-alarm access:
+    - degrade gracefully or guide to settings.
+
+  D. Doze + failsafe strategy
+  - You schedule a failsafe 10 minutes after the main alarm.
+  - Current receiver ignores FAILSAFE extra; there is no difference in behavior.
+  What to do
+  - Use FAILSAFE to change behavior:
+    - If main alarm didn’t ring or wasn’t dismissed, failsafe should re-trigger sound/UI aggressively.
+    - Or re-start service and raise notification again.
+
+  ========================================
+  3) Smart Window (REM mode) correctness
+  ========================================
+  Right now, Smart Window is mostly UI + scheduling plumbing, but not decision logic.
+
+  What’s missing
+  A. Definition of “smart”
+  - The UI suggests: “Waking during light sleep” via REM timing.
+  - But the scheduler currently:
+    - schedules a window start and a hard stop
+    - then immediately rings on whichever alarm fires (because AlarmReceiver has no logic)
+  So the alarm rings at windowStart (not “best REM time”) and also can ring at hardStop.
+
+  What to implement (minimum viable Smart Window)
+  1) Decide the actual trigger time once per night
+     Option 1 (simple):
+     - Compute candidate REM times from bedtime + cycle length (already in TimeModel.computeRemWakeTimes)
+     - Choose the candidate time that is closest to the target alarm time, but not after hard stop.
+     - Schedule exactly one alarm at that chosen time (plus a failsafe).
+     - This avoids two alarms and avoids “ringing early always”.
+  2) If you insist on “window start + hard stop”:
+     - At WINDOW_START: begin checking for “awake signals” or run a lightweight strategy
+     - When you decide it’s time to ring: ring once and cancel the hard stop.
+     - At HARD_STOP: ring only if not already rung.
+
+  B. Single source of truth for time math
+  - You currently have:
+    - AlarmTimeCalculator.computeTriggerTimeMillis(nowMillis, hour24, minute) for next day logic
+    - Time12 extensions for minutes conversions
+  Keep everything in one place and write tests for:
+  - target time near midnight
+  - bedtime before/after midnight
+  - cycle lengths not 90
+  - “closest REM time within window” selection
+
+  C. UI semantics confusion
+  - The “REM Smart Mode” switch toggles AlarmMode, not remEnabled.
+  - remEnabled appears to be a separate feature flag stored in RemSettingsStorage, but there is no visible switch for it in MainActivity.
+  What to do
+  - Decide which toggle the user understands:
+    - If Smart Mode is the feature: remove remEnabled entirely or expose it clearly.
+    - If remEnabled is intended as a master flag: add a switch and gate Smart Mode behind it.
+
+  ========================================
+  4) Awareness feature (currently dead code)
+  ========================================
+  Current state
+  - receiver/UserAwakeReceiver.kt cancels alarms when ACTION_USER_PRESENT fires.
+  - It is not registered (no intent-filter in manifest; no dynamic registration), so it never triggers.
+
+  What to do
+  A. Decide what “awareness” means
+  - If you only want “if user is already awake, don’t ring”:
+    - Cancelling the alarm when the user unlocks might cancel the alarm for the next day too, which is probably wrong.
+    - You likely want “mark as awakened today” and only suppress within the current alarm window.
+  B. Implement properly
+  Option 1: Dynamic registration (recommended)
+  - Register a BroadcastReceiver in a foreground-visible component (MainActivity / a service) for:
+    - ACTION_USER_PRESENT
+    - ACTION_SCREEN_ON (optional)
+  - Persist a “userAwakeToday” timestamp and check it in AlarmReceiver before ringing.
+  Option 2: Use sensor/activity APIs (heavier)
+  - Step count, motion, etc. Not needed for MVP.
+
+  ========================================
+  5) Data / persistence review
+  ========================================
+  A. DataStore keys and migration
+  - Confirm each storage object has stable keys and default values.
+  - Add versioning/migration plan if you’ll ship updates.
+
+  B. Naming + code hygiene
+  - storage/MoningVibeStorage.kt filename typo, object name is fine.
+  - Consider standardizing naming and splitting storage vs repository vs model cleanly.
+
+  C. Streak + vibe
+  - SleepStreakStorage exists; ensure streak updates are triggered at the right time:
+    - on alarm dismiss? on “user awake” detection? on “bedtime met”?
+  Right now it looks like the UI reads streak, but the “event” that increments it isn’t clearly defined.
+
+  ========================================
+  6) UI/UX and product polish (after core alarm works)
+  ========================================
+  High impact
+  - Visual hierarchy:
+    - Use a consistent card system: headline + supporting text + primary action
+    - Reduce dense text and align switches/buttons uniformly
+  - Time picking UX:
+    - Your SetTimePopup uses a custom TimeInput. Confirm accessibility and error states (invalid hours/minutes).
+  - Explain the model:
+    - In Smart Mode, show:
+      - target time
+      - selected “best” ring time
+      - window bounds (start/hard stop)
+      - cycle length used
+
+  Medium impact
+  - Add “Test Alarm” button that schedules an alarm in 1 minute for sanity testing.
+  - Haptics + volume controls + “use alarm volume” option.
+  - Dismiss/Snooze as notification actions (so user can snooze without opening UI).
+
+  ========================================
+  7) Play Store readiness checklist
+  ========================================
+  Mandatory
+  - Runtime notification permission flow (Android 13+)
+  - Exact alarm justification and graceful fallback
+  - Foreground service behavior:
+    - startForeground quickly (you do, once started)
+    - ensure you can start FGS from alarm context (AlarmManager broadcast is acceptable; avoid starting from background arbitrary times)
+  - Privacy/Data Safety form:
+    - Document DataStore usage (local only)
+    - If you add analytics later, update policy
+
+  Nice to have
+  - App icon, feature graphic, screenshots
+  - In-app “Help” page explaining:
+    - how Smart Mode works
+    - how to exclude from battery optimizations if needed (only if you see real issues)
+  - Crash reporting (optional)
+
+  ========================================
+  8) Test plan (make the math and alarm logic trustworthy)
+  ========================================
+  Fix failing unit test
+  - SleepMathTest.exactlyOneRemCycle_whenSleepIsNinetyMinutes:
+    - expected should be [30] for bedtime 11:00 PM with 90 minutes sleep.
+
+  Add/expand tests
+  A. Time math
+  - Bedtime 12:00 AM edge cases
+  - Bedtime 12:xx AM and wake before/after
+  - Cycle length 80/100/120 min
+  - findClosestRemTime correctness (ties, empty list, wrap-around)
+
+  B. Alarm scheduling decisions (pure function tests)
+  - Extract “chooseSmartAlarmTime(bedtime, targetWake, cycleLen, window)” into a pure function and test it heavily.
+  - Then AlarmReceiver just executes the chosen schedule.
+
+  C. Integration sanity
+  - One instrumentation test that:
+    - toggles Smart Mode
+    - sets an alarm 1 minute ahead
+    - verifies notification posted / activity launched (limited, but useful)
+
+  ========================================
+  9) Concrete “next commits” (recommended order)
+  ========================================
+  Commit 1: Make alarm ring reliably
+  - Update AlarmReceiver to:
+    - start AlarmForegroundService
+    - post full-screen alarm notification that opens AlarmActivity
+  - Update AlarmActivity:
+    - ensure it stops service on dismiss/snooze
+    - cancel current alarms appropriately
+
+  Commit 2: Fix Smart Window behavior
+  - Implement a single chosen ring time instead of window start + hard stop ringing twice.
+  - Keep hard stop as failsafe only.
+
+  Commit 3: Permissions + settings UX
+  - Add POST_NOTIFICATIONS manifest permission + runtime request
+  - Add settings screen / card explaining exact alarm access and notification permission
+
+  Commit 4: Awareness (optional)
+  - Implement “already awake” logic safely (timestamped today + within window)
+  - Remove dead receiver code if you don’t ship it
+
+  Commit 5: Tests and cleanup
+  - Fix SleepMathTest expected value
+  - Add pure-function tests for smart selection
+  - Remove build/ intermediates and .git from release zip (keeps repo clean)
+
+  ========================================
+  10) Files referenced (quick map)
+  ========================================
+  Alarm core
+  - alarm/AlarmReceiver.kt
+  - alarm/AlarmScheduler.kt
+  - alarm/AlarmForegroundServices.kt
+  - alarm/AlarmActivity.kt
+  - alarm/AlarmTimeCalculator.kt (also contains WakeWindowCalculator)
+
+  Boot + awareness
+  - receiver/BootCompletedReceiver.kt
+  - receiver/UserAwakeReceiver.kt
+
+  Time math
+  - time/TimeModel.kt (Time12, conversions, computeSleepDurationMinutes, computeRemWakeTimes, findClosestRemTime)
+
+  State + repos
+  - viewmodel/MainViewModel.kt
+  - storage/*Storage.kt
+  - storage/repository/*
+
+  Tests
+  - app/src/test/java/com/araelAnaya/remclock/SleepMathTest.kt
+  - app/src/test/java/com/araelAnaya/remclock/AlarmTimeCalculatorTest.kt
+
+  End of audit.
