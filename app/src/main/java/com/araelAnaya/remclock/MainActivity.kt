@@ -36,9 +36,18 @@ import com.araelAnaya.remclock.storage.repository.impl.RemSettingsRepositoryImpl
 import com.araelAnaya.remclock.storage.repository.impl.SleepSettingsRepositoryImpl
 import com.araelAnaya.remclock.storage.repository.impl.SleepStreakRepositoryImpl
 import com.araelAnaya.remclock.viewmodel.model
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.Manifest
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.araelAnaya.remclock.storage.morning.MorningCheckInStore
+import com.araelAnaya.remclock.ui.MorningCheckInSheet
 
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -84,11 +93,25 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
         }
     }
+
+    private val requestNotifPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            // you can log this if you want
+        }
+
+    fun ensureNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+
+        return ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
 }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RemClockScreen(vm: MainViewModel) {
-    val context = LocalContext.current
     val alarmTime by vm.alarmTime.collectAsState()
     val bedTime by vm.bedtime.collectAsState()
     val sleepMinutes by vm.sleepMinutes.collectAsState()
@@ -97,11 +120,16 @@ fun RemClockScreen(vm: MainViewModel) {
     val remCycleMinutes by vm.remCycleMinutes.collectAsState()
     val sleepStreak by vm.sleepStreak.collectAsState()
     val streakStage by vm.streakStage.collectAsState()
-
-
-
     var showBedtimeDialog by remember { mutableStateOf(false) }
     var showAlarmTimeDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    val checkInStore = remember(appContext) {
+        MorningCheckInStore(appContext)
+    }
+    var showCheckIn by rememberSaveable {
+        mutableStateOf(checkInStore.shouldShow())
+    }
 
     Scaffold(
         topBar = {
@@ -133,15 +161,13 @@ fun RemClockScreen(vm: MainViewModel) {
                 }
             }
 
-            // ... (Action Buttons and InfoCard remain the same) ...
-
-            // --- ACTION BUTTONS ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = {
-                        (context as? MainActivity)?.ensureExactAlarmPermission()
+                        val activity = context as? MainActivity ?: return@Button
+                        activity.ensureNotificationPermission()
+                        activity.ensureExactAlarmPermission()
                         val (hour24, minute) = vm.getNextAlarmTime24()
-
                         when (alarmMode) {
                             AlarmMode.EXACT -> AlarmScheduler.scheduleAlarm(context, hour24, minute)
                             AlarmMode.SMART_WINDOW -> {
@@ -171,8 +197,6 @@ fun RemClockScreen(vm: MainViewModel) {
                     Text("Cancel")
                 }
             }
-
-            // --- SLEEP INSIGHTS CARD ---
             InfoCard(title = "Sleep Duration", icon = Icons.Default.Star) {
                 val (hours, mins) = formatSleepDuration(sleepMinutes)
                 Text("$hours hours $mins minutes", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
@@ -184,8 +208,6 @@ fun RemClockScreen(vm: MainViewModel) {
                     }
                 }
             }
-
-            // --- REM MODE CARD ---
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -202,14 +224,9 @@ fun RemClockScreen(vm: MainViewModel) {
                             onCheckedChange = { vm.setAlarmMode(if (it) AlarmMode.SMART_WINDOW else AlarmMode.EXACT) }
                         )
                     }
-
                     if (remEnabled && alarmMode == AlarmMode.SMART_WINDOW) {
                         val remWakeTimes by vm.remWakeTimes.collectAsState()
-
-                        // 1. Determine which time is "Best" for bolding
                         val closestRemMinutes = findClosestRemTime(remWakeTimes, alarmTime)
-
-                        // 2. Convert current alarm to minutes for exact selection matching
                         val currentAlarmMinutes = remember(alarmTime) {
                             val h24 = when {
                                 alarmTime.isAm && alarmTime.hour == 12 -> 0
@@ -218,21 +235,16 @@ fun RemClockScreen(vm: MainViewModel) {
                             }
                             h24 * 60 + alarmTime.minute
                         }
-
-                        // --- CYCLE TUNING ---
                         Spacer(Modifier.height(12.dp))
-
                         Text(
                             "REM Cycle Length",
                             style = MaterialTheme.typography.labelMedium
                         )
-
                         Text(
                             "$remCycleMinutes minutes",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-
                         Slider(
                             value = remCycleMinutes.toFloat(),
                             onValueChange = { vm.setRemCycleMinutes(it.toInt()) },
@@ -240,21 +252,17 @@ fun RemClockScreen(vm: MainViewModel) {
                             steps = 7, // 5-minute increments
                             modifier = Modifier.padding(horizontal = 4.dp)
                         )
-
                         Text(
                             "If you wake up groggy, try adjusting this.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-
-
                         Text("Recommended times:", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
                         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             remWakeTimes.take(3).forEach { minutes ->
                                 val t = minutesToTime12(minutes)
                                 val isSelected = minutes == currentAlarmMinutes
                                 val isBest = minutes == closestRemMinutes
-
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { vm.onRemTimeClicked(minutes) },
@@ -272,7 +280,6 @@ fun RemClockScreen(vm: MainViewModel) {
                         "Sleep streak: ${sleepStreak} nights",
                         style = MaterialTheme.typography.labelMedium
                     )
-
                     Text(
                         when (streakStage) {
                             model.StreakStage.EMBER -> "Your routine is catching fire 🔥"
@@ -282,19 +289,22 @@ fun RemClockScreen(vm: MainViewModel) {
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Text("How do you feel this morning?")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.GROGGY) }) { Text("Groggy") }
-                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.OKAY) }) { Text("Okay") }
-                        Button(onClick = { vm.submitMorningVibe(model.MorningVibe.ENERGIZED) }) { Text("Energized") }
-                    }
                 }
             }
         }
     }
-
-    // --- DIALOGS ---
-
+    if (showCheckIn) {
+        MorningCheckInSheet(
+            onMoodSelected = { mood ->
+                vm.submitMorningVibe(mood)
+                checkInStore.markCompleted()
+                showCheckIn = false
+            },
+            onDismiss = {
+                showCheckIn = false
+            }
+        )
+    }
     if (showAlarmTimeDialog) {
         SetTimePopup(
             isAlarmMode = true,
@@ -307,7 +317,6 @@ fun RemClockScreen(vm: MainViewModel) {
             }
         )
     }
-
     if (showBedtimeDialog) {
         SetTimePopup(
             isAlarmMode = false,
@@ -319,10 +328,7 @@ fun RemClockScreen(vm: MainViewModel) {
             }
         )
     }
-
-
 }
-
 @Composable
 fun InfoCard(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {

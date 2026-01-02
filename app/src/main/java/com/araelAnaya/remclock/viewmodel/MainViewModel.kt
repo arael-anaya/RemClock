@@ -14,10 +14,9 @@ import kotlinx.coroutines.launch
 import com.araelAnaya.remclock.alarm.AlarmMode
 import com.araelAnaya.remclock.storage.repository.AlarmModeRepository
 import androidx.lifecycle.SavedStateHandle
-import com.araelAnaya.remclock.storage.MorningVibeStorage
+import com.araelAnaya.remclock.storage.morning.MorningVibeStorage
 import com.araelAnaya.remclock.storage.repository.*
 import com.araelAnaya.remclock.time.toMinutesSinceMidnight
-import com.araelAnaya.remclock.viewmodel.model
 
 
 class MainViewModel(

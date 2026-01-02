@@ -1,8 +1,9 @@
-package com.araelAnaya.remclock.storage
+package com.araelAnaya.remclock.storage.morning
 
 import android.content.Context
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.araelAnaya.remclock.storage.dataStore
 import com.araelAnaya.remclock.viewmodel.model
 
 object MorningVibeStorage {

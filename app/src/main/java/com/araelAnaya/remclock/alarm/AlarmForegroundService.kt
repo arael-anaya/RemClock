@@ -19,12 +19,6 @@ class AlarmForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        // Use system default alarm sound
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        mediaPlayer = MediaPlayer.create(this, alarmUri)
-        mediaPlayer?.isLooping = true
-        mediaPlayer?.start()
-
         val channelId = "alarm_channel"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -41,14 +35,34 @@ class AlarmForegroundService : Service() {
             NotificationCompat.Builder(this, channelId)
                 .setContentTitle("RemClock Alarm")
                 .setContentText("Alarm is ringing")
-                // Use launcher icon instead of ic_alarm
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setOngoing(true)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .build()
 
+        // IMPORTANT: foreground FIRST
         startForeground(1001, notification)
+
+        // Now do slower work (media)
+        try {
+            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+            mediaPlayer = MediaPlayer.create(this, alarmUri)
+
+            if (mediaPlayer == null) {
+                stopSelf()
+                return
+            }
+
+            mediaPlayer?.isLooping = true
+            mediaPlayer?.start()
+        } catch (t: Throwable) {
+            stopSelf()
+        }
+
     }
+
 
     override fun onDestroy() {
         mediaPlayer?.stop()

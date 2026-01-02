@@ -11,11 +11,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.araelAnaya.remclock.storage.repository.impl.AlarmModeRepositoryImpl
-import com.araelAnaya.remclock.storage.AlarmModeStorage
 import com.araelAnaya.remclock.ui.theme.RemClockTheme
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import android.view.WindowManager
+
 
 class AlarmActivity : ComponentActivity() {
 
@@ -24,11 +22,12 @@ class AlarmActivity : ComponentActivity() {
 
         val appContext = applicationContext
 
-        val alarmMode = runBlocking {
-            AlarmModeRepositoryImpl(
-                AlarmModeStorage(appContext)
-            ).mode.first()
-        }
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
 
         setContent {
             RemClockTheme {
@@ -75,7 +74,7 @@ class AlarmActivity : ComponentActivity() {
 
                             AlarmScheduler.snooze(
                                 context = appContext,
-                                alarmMode = alarmMode
+                                alarmMode = AlarmMode.EXACT
                             )
 
                             finish()
@@ -85,6 +84,14 @@ class AlarmActivity : ComponentActivity() {
                     }
                 }
             }
+
         }
     }
+    private fun stopAlarm() {
+        stopService(Intent(this, AlarmForegroundService::class.java))
+        AlarmNotification.dismiss(this)
+    }
+
 }
+
+
