@@ -1,4 +1,6 @@
-package com.araelAnaya.remclock
+package com.araelAnaya.remclock.time
+
+import kotlin.math.abs
 
 data class Time12(
     val hour: Int,    // 1..12
@@ -94,7 +96,7 @@ fun findClosestRemTime(
     val alarmMinutes = alarmTime.toMinutesSinceMidnight()
 
     return remTimes.minByOrNull { rem ->
-        kotlin.math.abs(rem - alarmMinutes)
+        abs(rem - alarmMinutes)
     }
 }
 

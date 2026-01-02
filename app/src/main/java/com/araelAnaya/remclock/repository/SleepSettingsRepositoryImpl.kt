@@ -1,7 +1,7 @@
 package com.araelAnaya.remclock.repository
 
 import android.content.Context
-import com.araelAnaya.remclock.Time12
+import com.araelAnaya.remclock.time.Time12
 import com.araelAnaya.remclock.storage.SleepSettingsStorage
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

@@ -1,5 +1,8 @@
 package com.araelAnaya.remclock
 
+import com.araelAnaya.remclock.time.Time12
+import com.araelAnaya.remclock.time.computeRemWakeTimes
+import com.araelAnaya.remclock.time.computeSleepDurationMinutes
 import org.junit.Assert
 import org.junit.Test
 

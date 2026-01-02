@@ -1,6 +1,7 @@
 package com.araelAnaya.remclock.alarm
 
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 object AlarmTimeCalculator {
 
@@ -22,5 +23,29 @@ object AlarmTimeCalculator {
         }
 
         return calendar.timeInMillis
+    }
+}
+
+object WakeWindowCalculator {
+
+    private const val WINDOW_BEFORE_MIN = 15
+    private const val WINDOW_AFTER_MIN = 5
+
+    data class WakeWindow(
+        val windowStartMillis: Long,
+        val hardStopMillis: Long
+    )
+
+    fun fromTargetTime(targetMillis: Long): WakeWindow {
+        val start =
+            targetMillis - TimeUnit.MINUTES.toMillis(WINDOW_BEFORE_MIN.toLong())
+
+        val end =
+            targetMillis + TimeUnit.MINUTES.toMillis(WINDOW_AFTER_MIN.toLong())
+
+        return WakeWindow(
+            windowStartMillis = start,
+            hardStopMillis = end
+        )
     }
 }

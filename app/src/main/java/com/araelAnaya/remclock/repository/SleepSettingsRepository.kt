@@ -1,6 +1,6 @@
 package com.araelAnaya.remclock.repository
 
-import com.araelAnaya.remclock.Time12
+import com.araelAnaya.remclock.time.Time12
 import kotlinx.coroutines.flow.StateFlow
 
 interface SleepSettingsRepository {

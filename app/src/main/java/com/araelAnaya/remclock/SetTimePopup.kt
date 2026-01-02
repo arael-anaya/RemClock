@@ -5,10 +5,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.araelAnaya.remclock.time.Time12
+import com.araelAnaya.remclock.time.TimeInput
 
 @Composable
-fun BedtimeDialog(
+fun SetTimePopup(
+    isAlarmMode: Boolean, // The variable to toggle between Alarm and Bedtime text
     initialTime: Time12,
     onDismiss: () -> Unit,
     onSave: (Time12) -> Unit
@@ -28,14 +30,17 @@ fun BedtimeDialog(
             }
         },
         title = {
-            Text("Set Bedtime")
+            // Dynamically set the title based on the mode
+            Text(if (isAlarmMode) "Set Alarm" else "Set Bedtime")
         },
         text = {
             Column(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TimeInput(
                     value = tempTime,
+                    // Keeps your existing arrow-update logic working perfectly
                     onChange = { update -> tempTime = update(tempTime) }
                 )
             }

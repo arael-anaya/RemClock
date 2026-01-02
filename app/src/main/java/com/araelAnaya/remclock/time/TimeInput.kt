@@ -1,4 +1,4 @@
-package com.araelAnaya.remclock
+package com.araelAnaya.remclock.time
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*

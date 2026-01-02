@@ -5,7 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
-import com.araelAnaya.remclock.Time12
+import com.araelAnaya.remclock.time.Time12
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
