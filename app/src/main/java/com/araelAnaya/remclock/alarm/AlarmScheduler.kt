@@ -8,6 +8,14 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object AlarmScheduler {
+    const val EXTRA_ALARM_TYPE = "extra_alarm_type"
+
+    enum class AlarmType {
+        WINDOW_START,
+        HARD_STOP,
+        FAILSAFE
+    }
+
 
     private const val FAILSAFE_DELAY_MINUTES = 10
 
@@ -20,7 +28,11 @@ object AlarmScheduler {
     fun scheduleAlarmAtMillis(context: Context, triggerTimeMillis: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        val mainIntent = Intent(context, AlarmReceiver::class.java)
+        val mainIntent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra(EXTRA_ALARM_TYPE, AlarmType.HARD_STOP.name)
+        }
+
+
         val mainPending = PendingIntent.getBroadcast(
             context,
             0,
@@ -29,8 +41,9 @@ object AlarmScheduler {
         )
 
         val failsafeIntent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("FAILSAFE", true)
+            putExtra(EXTRA_ALARM_TYPE, AlarmType.FAILSAFE.name)
         }
+
         val failsafePending = PendingIntent.getBroadcast(
             context,
             1,
@@ -96,19 +109,28 @@ object AlarmScheduler {
             context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val startIntent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("WINDOW_START", true)
+            putExtra(
+                EXTRA_ALARM_TYPE,
+                AlarmType.WINDOW_START.name
+            )
         }
+
 
         val startPending = PendingIntent.getBroadcast(
             context,
-            0,
+            100,
             startIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+
         val hardStopIntent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("HARD_STOP", true)
+            putExtra(
+                EXTRA_ALARM_TYPE,
+                AlarmType.HARD_STOP.name
+            )
         }
+
 
         val hardStopPending = PendingIntent.getBroadcast(
             context,
@@ -154,7 +176,11 @@ object AlarmScheduler {
                     return
                 }
 
-                val window = WakeWindowCalculator.fromTargetTime(targetMillis)
+                val now = System.currentTimeMillis()
+                val window = WakeWindowCalculator.fromTargetTime(
+                    nowMillis = now,
+                    targetMillis = targetMillis
+                )
 
                 val snoozeCandidate = now + 9 * 60 * 1000L
 

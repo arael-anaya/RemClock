@@ -2,9 +2,6 @@
 Power Nap Mode: A dedicated section for "NASA Naps" ($20$ minutes) or "Full Cycle Naps" ($90$ minutes)
 that bypasses the standard alarm setup.
 
-3. Gamification & InsightsGive users a reason to open the app besides just turning off a noise.
-Make streaks and check in UI better. Hide Check in Ui after answer is selected, or x in corner.
-
  4. Aesthetic & UX EnhancementsTo hit that "Warm/Fun" vibe you're looking for:
  Dynamic Backgrounds: The UI color could shift based on the time of day—deep indigos and purples at
   night, transitioning to warm oranges and soft yellows as the alarm time approaches.
@@ -23,6 +20,14 @@ Make streaks and check in UI better. Hide Check in Ui after answer is selected, 
   Some sort of deep learning LLM model that learns the users patterns and optimizes
   how they should be sleeping.
   Show how much sleep the user will get
+  Fix UI
+  App does not show alarm menu if it is off
+  keep debugging window sleep mode\
+  seperate window and rem mode?
+  Add settings creen
+  multiple alarm capabilities
+  show currently scheduled alarms
+  tutorial screen.
 
   RemClock Deep Analysis (codebase audit from RemClock.zip)
 
@@ -34,18 +39,6 @@ Make streaks and check in UI better. Hide Check in Ui after answer is selected, 
   ========================================
   0) Immediate “does it compile / run” checklist
   ========================================
-  A. Alarm sound will not play (core functionality gap)
-  - AlarmForegroundService exists (alarm/AlarmForegroundServices.kt) and correctly starts MediaPlayer in onCreate() and calls startForeground().
-  - BUT nothing ever starts this service.
-    - Search across codebase: no startService() / startForegroundService() calls found.
-    - AlarmReceiver (alarm/AlarmReceiver.kt) currently only launches AlarmActivity.
-    - AlarmActivity only stops the service (Dismiss/Snooze), but never starts it.
-  What to do
-  1) Start AlarmForegroundService when an alarm fires (best place: AlarmReceiver).
-     - In AlarmReceiver.onReceive():
-       - call ContextCompat.startForegroundService(...) to start AlarmForegroundService
-       - also launch (or notify) AlarmActivity in a compliant way (see section 2).
-  2) Ensure AlarmActivity is started from a user-visible path (full-screen notification) to avoid background-launch restrictions.
 
   B. Smart Window / Wake window extras are ignored
   - AlarmScheduler schedules different intents with extras:

@@ -63,9 +63,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
                             }
                         }.timeInMillis
 
-                        // Compute smart wake window
-                        val window =
-                            WakeWindowCalculator.fromTargetTime(targetMillis)
+                        val window = WakeWindowCalculator.fromTargetTime(
+                            nowMillis = now,
+                            targetMillis = targetMillis
+                        )
 
                         // Schedule wake window alarms
                         AlarmScheduler.scheduleWakeWindow(

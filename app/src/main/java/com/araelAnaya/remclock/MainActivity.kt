@@ -86,6 +86,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        WakeConfidenceEvaluator.recordUserInteraction()
+    }
+
     fun ensureExactAlarmPermission() {
         val alarmManager = getSystemService(android.app.AlarmManager::class.java)
         if (!alarmManager.canScheduleExactAlarms()) {
@@ -169,18 +174,39 @@ fun RemClockScreen(vm: MainViewModel) {
                         activity.ensureExactAlarmPermission()
                         val (hour24, minute) = vm.getNextAlarmTime24()
                         when (alarmMode) {
-                            AlarmMode.EXACT -> AlarmScheduler.scheduleAlarm(context, hour24, minute)
+
+                            AlarmMode.EXACT -> {
+                                AlarmScheduler.scheduleAlarm(
+                                    context = context,
+                                    hour24 = hour24,
+                                    minute = minute
+                                )
+                            }
+
                             AlarmMode.SMART_WINDOW -> {
                                 val targetMillis = java.util.Calendar.getInstance().apply {
                                     set(java.util.Calendar.HOUR_OF_DAY, hour24)
                                     set(java.util.Calendar.MINUTE, minute)
                                     set(java.util.Calendar.SECOND, 0)
-                                    if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                    if (timeInMillis <= System.currentTimeMillis()) {
+                                        add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                    }
                                 }.timeInMillis
-                                val window = WakeWindowCalculator.fromTargetTime(targetMillis)
-                                AlarmScheduler.scheduleWakeWindow(context, window.windowStartMillis, window.hardStopMillis)
+
+                                val now = System.currentTimeMillis()
+                                val window = WakeWindowCalculator.fromTargetTime(
+                                    nowMillis = now,
+                                    targetMillis = targetMillis
+                                )
+
+                                AlarmScheduler.scheduleWakeWindow(
+                                    context,
+                                    window.windowStartMillis,
+                                    window.hardStopMillis
+                                )
                             }
                         }
+
                     },
                     modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium
@@ -343,3 +369,5 @@ fun InfoCard(title: String, icon: ImageVector, content: @Composable ColumnScope.
         }
     }
 }
+
+

@@ -29,23 +29,28 @@ object AlarmTimeCalculator {
 object WakeWindowCalculator {
 
     private const val WINDOW_BEFORE_MIN = 15
-    private const val WINDOW_AFTER_MIN = 5
+    private const val MIN_DELAY_MS = 1_000L // 1 second safety
 
     data class WakeWindow(
         val windowStartMillis: Long,
         val hardStopMillis: Long
     )
 
-    fun fromTargetTime(targetMillis: Long): WakeWindow {
-        val start =
+    fun fromTargetTime(
+        nowMillis: Long,
+        targetMillis: Long
+    ): WakeWindow {
+
+        val rawStart =
             targetMillis - TimeUnit.MINUTES.toMillis(WINDOW_BEFORE_MIN.toLong())
 
-        val end =
-            targetMillis + TimeUnit.MINUTES.toMillis(WINDOW_AFTER_MIN.toLong())
+        val clampedStart =
+            maxOf(rawStart, nowMillis + MIN_DELAY_MS)
 
         return WakeWindow(
-            windowStartMillis = start,
-            hardStopMillis = end
+            windowStartMillis = clampedStart,
+            hardStopMillis = targetMillis
         )
     }
 }
+
